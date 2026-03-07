@@ -34,24 +34,11 @@ function getMailDataFromDOM() {
 /**
  * 解析結果を元にURLを生成する
  */
-function generateCalendarUrl(analysis) {
-  const baseUrl = "https://calendar.google.com/calendar/render?action=TEMPLATE";
-  const params = new URLSearchParams({
-    text: analysis.title,
-    dates: `${analysis.start}/${analysis.end}`,
-    details: analysis.details
-  });
-  return `${baseUrl}&${params.toString()}`;
-}
-
-/**
- * Gemini API を使ってメールを解析する
- *  TODO: local LLM にも将来的に対応する
- */
 async function analyzeMailWithGemini(subject, body) {
-  const API_KEY = 'YOUR_GEMINI_API_KEY'; // ここに取得したキーを入力
-  const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
-
+// config.js から読み込んだ値を使用
+  const API_KEY = CONFIG.GEMINI_API_KEY;
+  const MODEL = CONFIG.MODEL_NAME;
+    
   const prompt = `
 以下のメール内容から、Googleカレンダーに登録するための情報を抽出してJSON形式で出力してください。
 現在の時刻は ${new Date().toLocaleString('ja-JP')} です。
@@ -66,7 +53,7 @@ async function analyzeMailWithGemini(subject, body) {
   "end": "YYYYMMDDTHHMMSSZ",
   "details": "予定の説明（要約）"
 }
-※日時は必ずUTC形式（末尾にZ）で出力してください。
+※時刻はUTC形式。もし時間が不明な場合は、現在の時刻の1時間後をデフォルトにしてください。
   `;
 
   try {
@@ -75,14 +62,35 @@ async function analyzeMailWithGemini(subject, body) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { response_mime_type: "application/json" } // JSONで返却を強制
+        generationConfig: { 
+          response_mime_type: "application/json",
+          temperature: 0.1 // 安定性を高めるために低めに設定
+        }
       })
     });
 
     const data = await response.json();
-    return JSON.parse(data.candidates[0].content.parts[0].text);
+
+    // API側からエラーが返ってきた場合
+    if (data.error) {
+      console.error("Gemini API Error Detail:", data.error.message);
+      alert("APIエラー: " + data.error.message);
+      return null;
+    }
+
+    // 回答がブロックされた、または空の場合
+    if (!data.candidates || data.candidates.length === 0 || !data.candidates[0].content) {
+      console.error("Gemini Response is empty or blocked:", data);
+      alert("AIから回答が得られませんでした。安全フィルタに抵触した可能性があります。");
+      return null;
+    }
+
+    // 正常なケース
+    const jsonString = data.candidates[0].content.parts[0].text;
+    return JSON.parse(jsonString);
+
   } catch (e) {
-    console.error("Gemini API Error:", e);
+    console.error("Network or Parsing Error:", e);
     return null;
   }
 }
