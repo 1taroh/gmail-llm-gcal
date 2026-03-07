@@ -1,21 +1,25 @@
 document.getElementById('extractBtn').addEventListener('click', async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   
-  // 1. Gmail側からデータを取得してくる
   const results = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
-    function: getMailDataFromDOM, // 取得専用の関数
+    function: getMailDataFromDOM,
   });
 
   const mailData = results[0].result;
   if (!mailData) return;
 
-  // 2. popup.js 側でURLを生成する
-  const calendarUrl = generateCalendarUrl(mailData.subject, mailData.body);
+  // --- LLMによる解析フェーズ ---
+  console.log("LLM解析中...");
+  const analysis = await analyzeMailWithGemini(mailData.subject, mailData.body);
   
-  console.log("Generated URL:", calendarUrl);
+  if (!analysis) {
+    alert("解析に失敗しました。");
+    return;
+  }
 
-  // 3. 拡張機能のAPIを使って新しいタブを開く (これが一番確実)
+  // --- URL生成と遷移 ---
+  const calendarUrl = generateCalendarUrl(analysis);
   chrome.tabs.create({ url: calendarUrl });
 });
 
@@ -27,19 +31,16 @@ function getMailDataFromDOM() {
   return { subject, body };
 }
 
-function generateCalendarUrl(title, details) {
+/**
+ * 解析結果を元にURLを生成する
+ */
+function generateCalendarUrl(analysis) {
   const baseUrl = "https://calendar.google.com/calendar/render?action=TEMPLATE";
-  
-  // 本来はここをLLMで動的に生成する
-  const startTime = "20260310T030000Z"; 
-  const endTime = "20260310T040000Z";
-
   const params = new URLSearchParams({
-    text: title,
-    dates: `${startTime}/${endTime}`,
-    details: details
+    text: analysis.title,
+    dates: `${analysis.start}/${analysis.end}`,
+    details: analysis.details
   });
-
   return `${baseUrl}&${params.toString()}`;
 }
 
