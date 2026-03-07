@@ -19,8 +19,9 @@ document.getElementById('extractBtn').addEventListener('click', async () => {
   }
 
   // --- URL生成と遷移 ---
-  const calendarUrl = generateCalendarUrl(analysis);
-  chrome.tabs.create({ url: calendarUrl });
+    const calendarUrl = generateCalendarUrl(analysis);
+    console.log(calendarUrl) // デバック時に使用
+//   chrome.tabs.create({ url: calendarUrl }); // デバック時はコメントアウト
 });
 
 // --- 補助関数 ---
