@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>gmail-llm-gcal options</title>
+  <style>
+    .section { margin-bottom: 20px; border-bottom: 1px solid #ccc; padding-bottom: 10px; }
+    label { display: block; margin-top: 5px; }
+  </style>
+</head>
+<body>
+  <h1>gmail-llm-gcal options</h1>
+
+  <div class="section">
+    <h3>Gemini API</h3>
+    <label>API Key: <input type="password" id="gemini-key"></label>
+    <h3>Gemini Model</h3>
+    <label>Model: <input type="text" id="gemini-model" placeholder="gemini-3-flash-preview"></label>
+  </div>
+
+  <div class="section">
+    <h3>Ollama (Local)</h3>
+    <label>Endpoint: <input type="text" id="ollama-url" placeholder="http://dummy:11434"></label>
+    <h3>Gemini Model</h3>
+    <label>Model: <input type="text" id="ollama-model" placeholder="qwen3.5:0.8b"></label>
+  </div>
+
+  <div class="section">
+    <h3>使用するモデルの選択</h3>
+    <label><input type="radio" name="mode" value="gemini" id="use-gemini"> Gemini を使用</label>
+    <label><input type="radio" name="mode" value="ollama" id="use-ollama"> Ollama を使用</label>
+  </div>
+
+  <button id="save">保存</button>
+
+  <script src="options.js"></script>
+</body>
+</html>

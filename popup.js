@@ -11,7 +11,18 @@ document.getElementById('extractBtn').addEventListener('click', async () => {
 
   // --- LLMによる解析フェーズ ---
   console.log("LLM解析中...");
-  const analysis = await analyzeMailWithGemini(mailData.subject, mailData.body);
+  let analysis = null;
+
+  const { selectedModel } = await chrome.storage.sync.get("selectedModel")
+  if (selectedModel == "ollama") {
+    analysis = await analyzeMailWithOllama(mailData.subject, mailData.body);
+  } else if (selectedModel == "gemini") {
+    analysis = await analyzeMailWithGemini(mailData.subject, mailData.body);
+  }
+  else {
+    console.log("selectedModel が不正な値です．");
+    console.log(selectedModel);
+  }
   
   if (!analysis) {
     alert("解析に失敗しました。");
@@ -20,17 +31,9 @@ document.getElementById('extractBtn').addEventListener('click', async () => {
 
   // --- URL生成と遷移 ---
     const calendarUrl = generateCalendarUrl(analysis);
-    console.log(calendarUrl) // デバック時に使用
-//   chrome.tabs.create({ url: calendarUrl }); // デバック時はコメントアウト
+    // console.log(calendarUrl) // デバック時に使用
+  chrome.tabs.create({ url: calendarUrl }); // デバック時はコメントアウト
 });
-
-// --- 補助関数 ---
-
-function getMailDataFromDOM() {
-  const subject = document.querySelector('h2.hP')?.innerText || "無題の予定";
-  const body = document.querySelector('div.a3s.aiL')?.innerText || "";
-  return { subject, body };
-}
 
 /**
  * 解析結果を元にURLを生成する
@@ -46,38 +49,17 @@ function generateCalendarUrl(analysis) {
 }
 
 async function analyzeMailWithGemini(subject, body) {
-// config.js から読み込んだ値を使用
-  const API_KEY = CONFIG.GEMINI_API_KEY;
-  const MODEL = CONFIG.MODEL_NAME;
+  const settings = await chrome.storage.sync.get(["geminiKey", "geminiModel"])
+  const API_KEY = settings.geminiKey;
+  const MODEL = settings.geminiModel;
+
   const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}`;
 
   const statusEl = document.getElementById('status');
-  if (statusEl) statusEl.innerText = "AI解析中... (数秒かかります)";
+  if (statusEl) statusEl.innerText = "AI解析中... (十数秒かかります)";
 
   // 1. プロンプトの準備
-  // 相対的な時間（明日、来週など）を解決するために現在時刻を渡すのが肝
-  const now = new Date();
-  const prompt = `
-以下のメール内容から、Googleカレンダーの予定作成に必要な情報を抽出してJSON形式で出力してください。
-
-【現在の時刻】: ${now.toLocaleString('ja-JP')} (日本標準時)
-【メール件名】: ${subject}
-【メール本文】: ${body}
-
-【出力ルール】:
-1. JSON形式のみを出力してください。
-2. "start" と "end" は必ず Google カレンダーが解釈可能な ISO 8601 形式 (YYYYMMDDTHHMMSSZ) のUTC時間で出力してください。
-   例: 日本時間 2026/03/10 12:00 なら 20260310T030000Z となります。
-3. メールに終了時刻の記載がない場合は、開始時刻の1時間後を終了時刻に設定してください。
-
-【出力フォーマット】:
-{
-  "title": "予定のタイトル",
-  "start": "YYYYMMDDTHHMMSSZ", 
-  "end": "YYYYMMDDTHHMMSSZ",
-  "details": "予定の説明（メールの要約と、必要に応じて場所やWeb会議URLを含める）"
-}
-`;
+  const prompt = getPrompt(subject, body)
 
   console.log("Gemini API リクエスト開始...");
   const startTime = Date.now();
@@ -126,4 +108,125 @@ async function analyzeMailWithGemini(subject, body) {
     alert("エラーが発生しました。コンソールを確認してください。");
     return null;
   }
+}
+
+async function analyzeMailWithOllama(subject, body) {
+  const settings = await chrome.storage.sync.get(["ollamaUrl", "ollamaModel"])
+  const OLLAMA_URL = settings.ollamaUrl + "/api/chat";
+  const MODEL_NAME = settings.ollamaModel;
+
+  const statusEl = document.getElementById('status');
+  if (statusEl) statusEl.innerText = "ローカルLLMで解析中...";
+
+  const prompt = getPrompt(subject, body)
+
+try {
+    const response = await fetch(OLLAMA_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: MODEL_NAME,
+        messages: [{ role: "user", content: prompt }],
+        think: false,
+        stream: false,
+        format: "json" // TODO: json mode を正しく使う https://ollama.com/blog/structured-outputs
+      })
+    });
+
+  if (!response.ok) throw new Error(`Ollama Error: ${response.status}`);
+
+  // 1. まずテキストとして一度だけ読み取る
+  const rawText = await response.text();
+  // console.log("Ollama Raw Response:", rawText);
+
+  // 2. response.json() は呼ばず、この rawText をパースする
+  const data = JSON.parse(rawText);
+  console.log(data)
+
+  // 3. Ollamaの構造 (message.content) から、さらに中のJSON文字列を取り出す
+  let contentString = data.message?.content;
+  if (!contentString) throw new Error("Content is empty");
+
+  // 4. 最初に出現する '{' から最後に出現する '}' までを抽出する正規表現
+  const jsonMatch = contentString.match(/\{[\s\S]*\}/);
+      
+  if (jsonMatch) {
+    contentString = jsonMatch[0];
+  } else {
+    throw new Error("有効なJSON構造が見つかりませんでした。");
+  }
+  console.log(contentString)
+
+  // 5. content の中身もJSON形式の文字列なので、再度パースしてオブジェクトにする
+  const result = JSON.parse(contentString);
+  
+  // 6. フォーマットの調整
+  result.start = formatToGoogleCalendarDate(result.start);
+  result.end = formatToGoogleCalendarDate(result.end);
+
+  console.log("解析成功:", result);
+  return result;
+
+  } catch (e) {
+    console.error("Ollama連携失敗:", e);
+    return null;
+  }
+}
+
+// --- 補助関数 ---
+
+function getMailDataFromDOM() {
+  const subject = document.querySelector('h2.hP')?.innerText || "無題の予定";
+  const body = document.querySelector('div.a3s.aiL')?.innerText || "";
+  return { subject, body };
+}
+
+function getPrompt(subject, body) {
+  const now = new Date(); // 相対的な時間（明日、来週など）を解決するために現在時刻を渡すのが肝
+  const prompt = `
+  以下のメール内容から、Googleカレンダー用の情報をJSONで抽出してください。
+  現在時刻: ${now.toLocaleString('ja-JP')}
+
+  【件名】: ${subject}
+  【本文】: ${body}
+
+  出力は以下のJSONフォーマットのみとし、解説は不要です。
+  {
+    "title": "予定タイトル",
+    "start": "YYYYMMDDTHHMMSS", 
+    "end": "YYYYMMDDTHHMMSS",
+    "details": "予定の説明（メールの要約と、必要に応じて場所やWeb会議URLを含める）"
+  }
+  ※不明な場合は現在時刻の1時間後をセットしてください。`;
+  
+  return prompt
+}
+
+/**
+ * 多様な日時形式を YYYYMMDDTHHMMSS に変換する
+ * 対応例: 2026/3/8 1:00, 2026/03/10T12:00Z, 20260310T120000Z, etc.
+ */
+function formatToGoogleCalendarDate(dateStr) {
+  // 1. 数字以外の文字で分割して、数字の配列を作る
+  // "2026/3/8 1:00" -> ["2026", "3", "8", "1", "00"]
+  const parts = dateStr.match(/\d+/g);
+  
+  if (!parts || parts.length < 3) {
+    console.error("日時の解析に失敗しました:", dateStr);
+    return dateStr; // 解析不能な場合はそのまま返す（カレンダー側でエラーにさせる）
+  }
+
+  // 2. 各パーツの桁数を揃える (YYYY, MM, DD, HH, mm, ss)
+  const year  = parts[0];
+  const month = parts[1].padStart(2, '0');
+  const day   = parts[2].padStart(2, '0');
+  const hour  = (parts[3] || '00').padStart(2, '0');
+  const min   = (parts[4] || '00').padStart(2, '0');
+  const sec   = (parts[5] || '00').padStart(2, '0');
+
+  // 3. Google形式 (YYYYMMDDTHHMMSSZ) に組み立て
+  const formatted = `${year}${month}${day}T${hour}${min}${sec}`;
+  
+  console.log(`Date Conversion: [${dateStr}] -> [${formatted}]`);
+  return formatted;
 }
