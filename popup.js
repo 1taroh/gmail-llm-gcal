@@ -129,7 +129,7 @@ try {
         messages: [{ role: "user", content: prompt }],
         think: false,
         stream: false,
-        format: "json" // TODO: json mode を正しく使う https://ollama.com/blog/structured-outputs
+        format: "json"
       })
     });
 
