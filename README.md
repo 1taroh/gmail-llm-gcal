@@ -1,10 +1,4 @@
 # gmail-llm-gcal
 gmailのメールからgoogle カレンダーの予定を自動作成する
 
-`config.js` を作成し，APIキーとモデル名を入力する．
-```
-const CONFIG = {
-  GEMINI_API_KEY: "YOUR_API_KEY",
-  MODEL_NAME: "gemini-3-flash-preview"
-};
-```
+chrome://extensions/ から `gmail-llm-gcal` の `詳細` > `拡張機能のオプション` で使用するAPIキーやモデルを管理できる．
