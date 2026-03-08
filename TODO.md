@@ -1,4 +1,4 @@
 - [ ] manifest.json の host_permission では localhost のモデルだけ使えるようになっているが，自前サーバー+ollama を使えるようにする
-- [ ] gmail のサイト以外で機能を無効化
+- [x] gmail のサイト以外で機能を無効化
 - [ ] ollama の json mode を正しく使う https://ollama.com/blog/structured-outputs
 - [ ] 予定に要約だけではなく，メール本文も追加する．

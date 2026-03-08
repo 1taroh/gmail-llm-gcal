@@ -7,7 +7,11 @@
     "http://127.0.0.1/*"
   ],
   "action": {
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_state": "disabled"
+  },
+  "background": {
+    "service_worker": "background.js"
   },
   "content_scripts": [
     {
