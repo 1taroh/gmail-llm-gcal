@@ -13,8 +13,9 @@ gmailのメールからgoogle カレンダーの予定を自動作成する
 2. chrome://extensions/ から `gmail-llm-gcal` の `詳細` > `拡張機能のオプション` で使用するAPIキーとモデルを入力する．
 
 ## ollama を使う
-1. ollama のサーバーをたてる
-2. chrome://extensions/ から `gmail-llm-gcal` の `詳細` > `拡張機能のオプション` で使用するサーバーのURLとモデルを入力する．
+1. ollama が chrome 拡張からのリクエストを拒否しないように，環境変数 `OLLAMA_ORIGINS="chrome-extension://*"` を追加．
+2. ollama のサーバーをたてる
+3. chrome://extensions/ から `gmail-llm-gcal` の `詳細` > `拡張機能のオプション` で使用するサーバーのURLとモデルを入力する．
 
 # 使い方
 1. gmail を開く．
