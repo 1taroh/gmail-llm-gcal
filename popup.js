@@ -12,6 +12,7 @@ document.getElementById('extractBtn').addEventListener('click', async () => {
   if (!mailData) return;
 
   // --- LLMによる解析フェーズ ---
+  console.time("LLMprocessing")
   console.log("LLM解析中...");
   let analysis = null;
 
@@ -35,6 +36,7 @@ document.getElementById('extractBtn').addEventListener('click', async () => {
     const calendarUrl = generateCalendarUrl(analysis);
     console.log(calendarUrl) // デバック時に使用
   // chrome.tabs.create({ url: calendarUrl }); // デバック時はコメントアウト
+  console.timeEnd("LLMprocessing")
 });
 
 /**
